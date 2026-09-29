@@ -216,3 +216,7 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 notebooks/market_risk_analysis_backup.ipynb
+# Generated detailed output tables
+outputs/tables/*_violations.csv
+outputs/tables/rolling_var_975.csv
+outputs/tables/garch_var_es_rolling_975.csv

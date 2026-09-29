@@ -1,0 +1,5 @@
+Phương pháp,n_obs,n_violations,violation_rate,expected_rate,LR_statistic,p_value,alpha,reject_H0,interpretation
+Historical,240,12,5.0,2.5,4.790711,0.028614,0.05,True,Bác bỏ H0: Mô hình VaR KHÔNG được hiệu chỉnh đúng (p-value < alpha).
+Parametric,240,13,5.4167,2.5,6.314459,0.011976,0.05,True,Bác bỏ H0: Mô hình VaR KHÔNG được hiệu chỉnh đúng (p-value < alpha).
+MonteCarlo,240,13,5.4167,2.5,6.314459,0.011976,0.05,True,Bác bỏ H0: Mô hình VaR KHÔNG được hiệu chỉnh đúng (p-value < alpha).
+GARCH,240,12,5.0,2.5,4.790711,0.028614,0.05,True,Bác bỏ H0: Mô hình VaR KHÔNG được hiệu chỉnh đúng (p-value < alpha).
