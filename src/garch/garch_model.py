@@ -10,6 +10,13 @@ def _prepare_returns(returns: pd.Series) -> pd.Series:
         clean_series = clean_series.pct_change().dropna()
     return clean_series
 
+def calculate_ewma_volatility(returns: pd.Series, lambda_param: float = 0.94) -> float:
+    """Phương án dự phòng EWMA (RiskMetrics) khi GARCH không hội tụ."""
+    weights = (1 - lambda_param) * (lambda_param ** np.arange(len(returns))[::-1])
+    weights /= weights.sum()
+    var_ewma = np.sum(weights * (returns ** 2))
+    return float(np.sqrt(var_ewma))
+
 def calculate_garch_var_es_rolling(portfolio_returns: pd.Series, 
                                     window: int = 250, 
                                     conf_level: float = CONF_LEVEL) -> pd.DataFrame:
@@ -17,26 +24,29 @@ def calculate_garch_var_es_rolling(portfolio_returns: pd.Series,
     results = []
     dates = ret.index
     z = norm.ppf(conf_level)
-    
     pdf_z = norm.pdf(z)
     es_factor = pdf_z / (1 - conf_level)
     
     for i in range(window, len(ret)):
-        # Scale 100 để thư viện arch tối ưu hóa tham số tốt hơn
-        sub_returns = ret.iloc[i-window:i] * 100.0
+        sub_returns = ret.iloc[i-window:i] * 100.0  # Scale 100 cho arch_model
         current_date = dates[i]
         
         try:
-            am = arch_model(sub_returns, vol='Garch', p=1, q=1, dist='normal', mean='Zero')
+            # 1. Đổi sang mean='Constant' để mô hình tự ước lượng mu
+            am = arch_model(sub_returns, vol='Garch', p=1, q=1, dist='normal', mean='Constant')
             res = am.fit(disp='off')
             
-            forecast = res.forecast(horizon=1)
-            next_vol = np.sqrt(forecast.variance.iloc[-1, 0]) / 100.0
+            # Dự báo mu và variance cho ngày tiếp theo (chia 100 để về lại scale chuẩn)
+            mu_forecast = res.forecast(horizon=1).mean.iloc[-1, 0] / 100.0
+            next_vol = np.sqrt(res.forecast(horizon=1).variance.iloc[-1, 0]) / 100.0
         except Exception:
-            next_vol = np.std(sub_returns / 100.0, ddof=1)
+            # Fallback sang EWMA chuyên nghiệp thay vì np.std
+            mu_forecast = sub_returns.mean() / 100.0
+            next_vol = calculate_ewma_volatility(sub_returns / 100.0)
 
-        garch_var = z * next_vol
-        garch_es = es_factor * next_vol
+        # 2. Áp dụng công thức VaR và ES có chứa thành phần mu chuẩn lý thuyết
+        garch_var = (z * next_vol) - mu_forecast
+        garch_es = (es_factor * next_vol) - mu_forecast
 
         results.append({
             'Date': current_date,
