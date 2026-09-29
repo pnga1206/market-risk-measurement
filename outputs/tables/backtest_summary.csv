@@ -1,0 +1,5 @@
+Phương pháp,Số ngày QS,Số vi phạm,Tỷ lệ vi phạm (%)
+Historical,2132,64,3.0019
+Parametric,2132,74,3.4709
+MonteCarlo,2132,75,3.5178
+GARCH,2132,87,4.0807
