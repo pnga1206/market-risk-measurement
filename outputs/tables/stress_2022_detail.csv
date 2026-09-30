@@ -1,5 +1,5 @@
 Phương pháp,VaR (%),ES (%),Số vi phạm,Tỷ lệ vi phạm (%),Tỷ lệ kỳ vọng (%)
 Historical,2.3002,3.3779,6,2.5,2.5
 Parametric,2.2751,3.3779,7,2.9167,2.5
-MonteCarlo,2.2845,3.3779,7,2.9167,2.5
+MonteCarlo,2.2891,3.3779,7,2.9167,2.5
 GARCH,2.2276,2.6422,8,3.3333,2.5

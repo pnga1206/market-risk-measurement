@@ -25,7 +25,12 @@ import numpy as np
 import pandas as pd
 from scipy.stats import norm
 from arch import arch_model
-
+from src.var.var_models import (
+    calculate_historical_var,
+    calculate_historical_es,
+    calculate_parametric_var,
+    calculate_monte_carlo_var_es,
+)
 from src.config import CONF_LEVEL, RANDOM_SEED, MC_SIMULATIONS
 
 warnings.filterwarnings("ignore")
@@ -72,48 +77,31 @@ def _load_returns(source: str, start: str, end: str) -> pd.Series:
     return series.loc[start:end].dropna()
 
 
-def _calculate_var_simple(returns: pd.Series, conf_level: float, n_sims: int, seed: int) -> dict:
+def _calculate_var_simple(
+    returns: pd.Series,
+    conf_level: float,
+    n_sims: int,
+    seed: int,
+) -> dict:
     """
-    Tính VaR Historical, Parametric và Monte Carlo cho một chuỗi returns.
-
-    Parameters
-    ----------
-    returns : pd.Series
-        Chuỗi log-return.
-    conf_level : float
-        Mức độ tin cậy.
-    n_sims : int
-        Số kịch bản Monte Carlo.
-    seed : int
-        Random seed.
-
-    Returns
-    -------
-    dict: VaR_Historical, VaR_Parametric, VaR_MonteCarlo, ES_Historical
+    Tính VaR Historical, Parametric, Monte Carlo và ES Historical
     """
-    alpha  = 1.0 - conf_level      # 2.5%
-    z      = norm.ppf(conf_level)
+    historical_var = calculate_historical_var(returns, conf_level)
+    historical_es = calculate_historical_es(returns, conf_level)
+    parametric_var = calculate_parametric_var(returns, conf_level)
 
-    # Historical VaR
-    h_var  = float(-np.percentile(returns, alpha * 100))
-    # Historical ES (Expected Shortfall)
-    h_es   = float(-returns[returns <= -h_var].mean()) if (returns <= -h_var).any() else h_var
-
-    # Parametric VaR
-    mu     = float(np.mean(returns))
-    sigma  = float(np.std(returns, ddof=1))
-    p_var  = float(-(mu - z * sigma))
-
-    # Monte Carlo VaR
-    np.random.seed(seed)
-    sims   = np.random.normal(mu, sigma, n_sims)
-    mc_var = float(-np.percentile(sims, alpha * 100))
+    monte_carlo_var, _ = calculate_monte_carlo_var_es(
+        returns,
+        conf_level=conf_level,
+        n_sims=n_sims,
+        seed=seed,
+    )
 
     return {
-        "VaR_Historical"  : round(h_var,  6),
-        "VaR_Parametric"  : round(p_var,  6),
-        "VaR_MonteCarlo"  : round(mc_var, 6),
-        "ES_Historical"   : round(h_es,   6),
+        "VaR_Historical": round(historical_var, 6),
+        "VaR_Parametric": round(parametric_var, 6),
+        "VaR_MonteCarlo": round(monte_carlo_var, 6),
+        "ES_Historical": round(historical_es, 6),
     }
 
 
