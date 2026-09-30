@@ -1,5 +1,5 @@
 """
-run_stress_test.py – Pipeline Stress Test hoàn chỉnh (Coder 3)
+run_stress_test.py – Pipeline Stress Test hoàn chỉnh
 ===============================================================
 Orchestrator chạy toàn bộ quy trình stress test cho 3 giai đoạn khủng hoảng:
     - 2008: Khủng hoảng tài chính toàn cầu
@@ -75,7 +75,7 @@ def run_full_stress_test(
     """
     _ensure_dirs()
     print("=" * 60)
-    print("STRESS TEST VaR – CODER 3")
+    print("STRESS TEST VaR")
     print("=" * 60)
 
     # ── Bước 1: Chạy stress test cho từng giai đoạn ─────────────────────────

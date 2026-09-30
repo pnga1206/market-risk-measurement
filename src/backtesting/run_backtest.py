@@ -1,5 +1,5 @@
 """
-run_backtest.py – Pipeline Backtesting hoàn chỉnh (Coder 3)
+run_backtest.py – Pipeline Backtesting hoàn chỉnh 
 =============================================================
 Orchestrator chạy toàn bộ quy trình backtesting VaR ngoài mẫu:
     1. Load dữ liệu portfolio return (Coder 1)
@@ -161,7 +161,7 @@ def run_full_backtest(
     """
     _ensure_dirs()
     print("=" * 60)
-    print("BACKTESTING VaR – CODER 3")
+    print("BACKTESTING VaR")
     print("=" * 60)
 
     # ── Bước 1: Load dữ liệu ─────────────────────────────────────────────────

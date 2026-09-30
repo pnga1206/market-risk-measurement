@@ -308,4 +308,3 @@ def plot_oos_violation_rate(
         print(f"  [OK] Lưu: {path}")
 
     plt.close(fig)
-    
