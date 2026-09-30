@@ -2,57 +2,83 @@ import numpy as np
 import pandas as pd
 from arch import arch_model
 from scipy.stats import norm
+
 from src.config import CONF_LEVEL
 
-def _prepare_returns(returns: pd.Series) -> pd.Series:
-    clean_series = returns.dropna()
-    if clean_series.abs().mean() > 1.0:
-        clean_series = clean_series.pct_change().dropna()
-    return clean_series
+SCALE = 100.0 
 
-def calculate_ewma_volatility(returns: pd.Series, lambda_param: float = 0.94) -> float:
-    """Phương án dự phòng EWMA (RiskMetrics) khi GARCH không hội tụ."""
-    weights = (1 - lambda_param) * (lambda_param ** np.arange(len(returns))[::-1])
+
+def _check_returns(returns) -> pd.Series:
+    """Bỏ NaN và kiểm tra đầu vào là log return thập phân (không tự chuyển đổi)."""
+    r = pd.Series(returns).dropna().astype(float)
+    if r.empty:
+        raise ValueError("Chuỗi lợi suất rỗng.")
+    if r.abs().max() > 0.5:
+        raise ValueError(
+            "Đầu vào không giống log return thập phân (0.01 = 1%). "
+            "Hãy truyền cột 'portfolio_return', không phải giá hay đơn vị %."
+        )
+    return r
+
+
+def calculate_ewma_volatility(returns, lambda_param: float = 0.94) -> float:
+    """EWMA (RiskMetrics) - phương án dự phòng khi GARCH không hội tụ.
+    `returns` là return thập phân, thứ tự cũ -> mới."""
+    r = np.asarray(returns, dtype=float)
+    weights = (1 - lambda_param) * lambda_param ** np.arange(len(r))[::-1]
     weights /= weights.sum()
-    var_ewma = np.sum(weights * (returns ** 2))
-    return float(np.sqrt(var_ewma))
+    return float(np.sqrt(np.sum(weights * r ** 2)))
 
-def calculate_garch_var_es_rolling(portfolio_returns: pd.Series, 
-                                    window: int = 250, 
-                                    conf_level: float = CONF_LEVEL) -> pd.DataFrame:
-    ret = _prepare_returns(portfolio_returns)
-    results = []
-    dates = ret.index
+
+def _garch_forecast(window_pct: pd.Series):
+    """Fit GARCH(1,1) trên cửa sổ (đơn vị %), trả về (mu, sigma) dạng thập phân.
+    Ném lỗi nếu không hội tụ hoặc kết quả không hợp lệ."""
+    am = arch_model(window_pct, mean="Constant", vol="Garch", p=1, q=1, dist="normal")
+    res = am.fit(disp="off")
+    if res.convergence_flag != 0:
+        raise RuntimeError("GARCH không hội tụ")
+    f = res.forecast(horizon=1, reindex=False)   # chỉ gọi 1 lần
+    mu = float(f.mean.iloc[-1, 0]) / SCALE
+    sigma = float(np.sqrt(f.variance.iloc[-1, 0])) / SCALE
+    if not (np.isfinite(mu) and np.isfinite(sigma) and sigma > 0):
+        raise RuntimeError("Dự báo GARCH không hợp lệ")
+    return mu, sigma
+
+
+def calculate_garch_var_es_rolling(portfolio_returns: pd.Series,
+                                   window: int = 250,
+                                   conf_level: float = CONF_LEVEL) -> pd.DataFrame:
+    """Output (index = Date):
+        GARCH_Volatility, VaR_GARCH, ES_97_5,
+        GARCH_Fallback (True nếu ngày đó phải dùng EWMA thay cho GARCH)
+    """
+    ret = _check_returns(portfolio_returns)
+    if len(ret) <= window:
+        raise ValueError(f"Cần nhiều hơn {window} quan sát, hiện có {len(ret)}.")
+
     z = norm.ppf(conf_level)
-    pdf_z = norm.pdf(z)
-    es_factor = pdf_z / (1 - conf_level)
-    
+    es_factor = norm.pdf(z) / (1 - conf_level)
+
+    rows = []
     for i in range(window, len(ret)):
-        sub_returns = ret.iloc[i-window:i] * 100.0  # Scale 100 cho arch_model
-        current_date = dates[i]
-        
+        sub = ret.iloc[i - window:i]
         try:
-            # 1. Đổi sang mean='Constant' để mô hình tự ước lượng mu
-            am = arch_model(sub_returns, vol='Garch', p=1, q=1, dist='normal', mean='Constant')
-            res = am.fit(disp='off')
-            
-            # Dự báo mu và variance cho ngày tiếp theo (chia 100 để về lại scale chuẩn)
-            mu_forecast = res.forecast(horizon=1).mean.iloc[-1, 0] / 100.0
-            next_vol = np.sqrt(res.forecast(horizon=1).variance.iloc[-1, 0]) / 100.0
+            mu, sigma = _garch_forecast(sub * SCALE)
+            fallback = False
         except Exception:
-            # Fallback sang EWMA chuyên nghiệp thay vì np.std
-            mu_forecast = sub_returns.mean() / 100.0
-            next_vol = calculate_ewma_volatility(sub_returns / 100.0)
+            mu = float(sub.mean())
+            sigma = calculate_ewma_volatility(sub.to_numpy())
+            fallback = True
 
-        # 2. Áp dụng công thức VaR và ES có chứa thành phần mu chuẩn lý thuyết
-        garch_var = (z * next_vol) - mu_forecast
-        garch_es = (es_factor * next_vol) - mu_forecast
-
-        results.append({
-            'Date': current_date,
-            'GARCH_Volatility': next_vol,
-            'VaR_GARCH': garch_var,
-            'ES_97_5': garch_es
+        rows.append({
+            "Date": ret.index[i],
+            "GARCH_Volatility": sigma,
+            "VaR_GARCH": z * sigma - mu,
+            "ES_97_5": es_factor * sigma - mu,
+            "GARCH_Fallback": fallback,
         })
 
-    return pd.DataFrame(results).set_index('Date')
+    out = pd.DataFrame(rows).set_index("Date")
+    n_fb = int(out["GARCH_Fallback"].sum())
+    print(f"[GARCH] {n_fb}/{len(out)} ngày phải dùng EWMA dự phòng.")
+    return out
