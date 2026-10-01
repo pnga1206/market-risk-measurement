@@ -2,7 +2,7 @@
 
 ## 1. Tổng quan
 
-Dự án thực hiện đo lường và đánh giá rủi ro thị trường đối với danh mục kết hợp **VN-Index và S&P 500**.
+Dự án thực hiện đo lường và đánh giá **rủi ro thị trường** đối với danh mục kết hợp **VN-Index và S&P 500**.
 
 Mục tiêu chính:
 
@@ -11,21 +11,23 @@ Mục tiêu chính:
 * Đánh giá chất lượng dự báo VaR thông qua backtesting.
 * Phân tích khả năng dự báo của các mô hình trong những giai đoạn thị trường căng thẳng.
 
-Toàn bộ quy trình được thực hiện bằng Python và Jupyter Notebook, với mã nguồn được tổ chức theo từng nhóm chức năng nhằm đảm bảo khả năng tái lập kết quả.
+Toàn bộ quy trình được thực hiện bằng **Python và Jupyter Notebook**. Dữ liệu, mã nguồn và kết quả nghiên cứu được lưu trữ trong repository nhằm phục vụ kiểm tra và tái lập.
 
 ---
 
 ## 2. Dữ liệu
 
-### Dữ liệu chính
+### 2.1. Dữ liệu chính
 
-* **Thời gian:** 01/01/2016 – 25/09/2026
-* **Tần suất:** dữ liệu ngày
-* **Danh mục:** VN-Index và S&P 500
-* **Tỷ trọng:** 50% VN-Index và 50% S&P 500
-* **Lợi suất:** log return
-* **Phương pháp ghép dữ liệu:** Inner Join
-* **Ngày đóng băng dữ liệu:** 25/09/2026
+Bộ dữ liệu chính được sử dụng trong giai đoạn **01/01/2016 – 25/09/2026**, với tần suất dữ liệu ngày.
+
+| Thiết lập    | Giá trị             |
+| ------------ | ------------------- |
+| Danh mục     | VN-Index và S&P 500 |
+| Tỷ trọng     | 50% – 50%           |
+| Lợi suất     | Log return          |
+| Ghép dữ liệu | Inner Join          |
+| Data Freeze  | 25/09/2026          |
 
 | Dữ liệu                 | Nguồn         |
 | ----------------------- | ------------- |
@@ -34,7 +36,7 @@ Toàn bộ quy trình được thực hiện bằng Python và Jupyter Notebook,
 | USD/VND                 | Yahoo Finance |
 | S&P 500 cho stress 2008 | Yahoo Finance |
 
-### Dữ liệu stress 2008
+### 2.2. Dữ liệu stress 2008–2009
 
 Đối với phân tích khủng hoảng tài chính toàn cầu, dự án sử dụng bộ dữ liệu riêng từ **01/01/2007 đến 31/12/2009**.
 
@@ -44,15 +46,7 @@ Dữ liệu năm 2007 được giữ lại để tạo rolling window trước k
 
 ## 3. Phương pháp
 
-Các thiết lập chính:
-
-* **Mức tin cậy:** 97,5%
-* **Horizon:** 1 ngày
-* **Rolling window:** 250 phiên
-* **Monte Carlo:** 10.000 mô phỏng
-* **Random seed:** 42
-
-### VaR
+### 3.1. VaR
 
 Ba phương pháp VaR được sử dụng:
 
@@ -60,11 +54,11 @@ Ba phương pháp VaR được sử dụng:
 * Parametric VaR
 * Monte Carlo VaR
 
-### GARCH và ES
+### 3.2. GARCH và ES
 
 Mô hình **GARCH(1,1)** được sử dụng để dự báo biến động có điều kiện, từ đó tính **GARCH VaR** và **ES 97,5%**.
 
-### Backtesting
+### 3.3. Backtesting
 
 Khả năng dự báo VaR được đánh giá bằng:
 
@@ -73,23 +67,28 @@ Khả năng dự báo VaR được đánh giá bằng:
 
 Tại mức tin cậy 97,5%, tỷ lệ vi phạm kỳ vọng là **2,5%**.
 
-### Stress Test
+### 3.4. Stress Test
 
-Stress test gồm hai phần:
+Stress test được thực hiện đối với ba giai đoạn:
 
-**In-sample stress analysis**
+* **2008–2009**
+* **2020**
+* **2022**
 
-* 2008–2009
-* 2020
-* 2022
+Phân tích gồm:
 
-**Out-of-sample stress backtesting**
+* **In-sample stress analysis:** đánh giá mức độ rủi ro trong các giai đoạn thị trường căng thẳng.
+* **Out-of-sample stress backtesting:** đánh giá khả năng dự báo VaR của các mô hình trong các giai đoạn stress.
 
-* 2008–2009
-* 2020
-* 2022
+### 3.5. Thiết lập chính
 
-Phần in-sample được sử dụng để mô tả mức độ nghiêm trọng của rủi ro trong các giai đoạn stress. Phần OOS được sử dụng để đánh giá khả năng dự báo VaR của các mô hình trong các giai đoạn này.
+| Tham số        | Giá trị         |
+| -------------- | --------------- |
+| Mức tin cậy    | 97,5%           |
+| Horizon        | 1 ngày          |
+| Rolling window | 250 phiên       |
+| Monte Carlo    | 10.000 mô phỏng |
+| Random seed    | 42              |
 
 ---
 
@@ -109,11 +108,12 @@ market-risk-measurement/
 │   └── tables/
 │
 ├── src/
+│   ├── config.py
 │   ├── backtesting/
+│   ├── data/
 │   ├── garch/
 │   ├── stress_test/
-│   ├── var/
-│   └── config.py
+│   └── var/
 │
 ├── requirements.txt
 └── README.md
@@ -121,68 +121,13 @@ market-risk-measurement/
 
 ---
 
-## 5. Hướng dẫn tái lập
+## 5. Kết quả nghiên cứu
 
-### Cách 1: Google Colab
+Các kết quả nghiên cứu được trình bày trực tiếp trong notebook và được lưu vào thư mục `outputs/`.
 
-Mở trực tiếp notebook trên Google Colab:
+### 5.1. Figures
 
-**[▶ Mở notebook trên Google Colab](https://colab.research.google.com/github/pnga1206/market-risk-measurement/blob/main/notebooks/market_risk_analysis.ipynb)**
-
-Sau khi notebook được mở trên Google Colab, chọn:
-
-**Runtime → Run all**
-
-Notebook sẽ tự động:
-
-1. Clone repository từ GitHub.
-2. Cài đặt các thư viện từ `requirements.txt`.
-3. Đọc dữ liệu local trong repository.
-4. Kiểm tra và chuẩn bị dữ liệu.
-5. Chuẩn bị chuỗi lợi suất danh mục.
-6. Tính Historical, Parametric và Monte Carlo VaR.
-7. Tính Rolling VaR.
-8. Ước lượng GARCH(1,1) và ES.
-9. Thực hiện backtesting bằng Kupiec và Christoffersen.
-10. Thực hiện stress test và stress OOS backtesting.
-11. Lưu các kết quả vào thư mục `outputs/`.
-
-Repository ở chế độ public nên không cần GitHub Personal Access Token để clone.
-
-### Cách 2: VS Code / Jupyter
-
-Yêu cầu: **Python và Git**.
-
-Clone repository:
-
-```bash
-git clone https://github.com/pnga1206/market-risk-measurement.git
-cd market-risk-measurement
-```
-
-Cài đặt thư viện:
-
-```bash
-python -m pip install -r requirements.txt
-```
-
-Mở notebook:
-
-```text
-notebooks/market_risk_analysis.ipynb
-```
-
-Sau đó chọn **Run All** để chạy toàn bộ quy trình.
-
----
-
-## 6. Kết quả đầu ra
-
-Kết quả phân tích được lưu trong thư mục `outputs/`. Một số kết quả tổng hợp và biểu đồ được lưu cùng repository để thuận tiện cho việc kiểm tra, trong khi các bảng dữ liệu chi tiết được tạo lại khi chạy notebook.
-
-### Figures
-
-Các biểu đồ được tạo trong quá trình phân tích gồm:
+Các biểu đồ chính gồm:
 
 * Rolling VaR 97,5%
 * Phân phối lợi suất trong các giai đoạn stress
@@ -191,24 +136,77 @@ Các biểu đồ được tạo trong quá trình phân tích gồm:
 * Tỷ lệ vi phạm VaR
 * Tỷ lệ vi phạm trong stress OOS
 
-### Tables
+### 5.2. Tables
 
 Các bảng kết quả gồm:
 
 * Backtest summary
+* Backtest violations
 * Kupiec results
 * Christoffersen results
-* Stress comparison
+* Stress test comparison
 * Stress detail cho 2008–2009, 2020 và 2022
 * OOS backtesting results cho từng giai đoạn stress
 
-Các bảng dữ liệu chi tiết có kích thước lớn như rolling VaR, GARCH VaR/ES và dữ liệu vi phạm VaR được tạo lại khi chạy notebook và không được lưu vào repository.
+Các file trong `outputs/` được lưu để phục vụ kiểm tra, đối chiếu và sử dụng trong báo cáo nghiên cứu.
 
+---
 
-## 7. Tái lập và quản lý tham số
+## 6. Hướng dẫn tái lập nghiên cứu
 
-Các tham số chính được tập trung tại `src/config.py` để đảm bảo toàn bộ phân tích sử dụng cùng một thiết lập.
+### Bước 1. Clone repository
 
-Notebook mặc định sử dụng dữ liệu local nhằm đảm bảo kết quả có thể tái lập ổn định. Khi cần cập nhật dữ liệu, có thể chuyển sang chế độ lấy dữ liệu trực tiếp từ các nguồn tương ứng.
+```bash
+git clone https://github.com/pnga1206/market-risk-measurement.git
+cd market-risk-measurement
+```
 
-Các tham số, ngày đóng băng dữ liệu và random seed được cố định trong phạm vi nghiên cứu nhằm hạn chế khác biệt khi chạy lại.
+### Bước 2. Cài đặt thư viện
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+### Bước 3. Mở notebook
+
+Mở file:
+
+```text
+notebooks/market_risk_analysis.ipynb
+```
+
+### Bước 4. Xóa output cũ
+
+Để chạy lại toàn bộ nghiên cứu từ đầu, chọn:
+
+**Clear All Outputs**
+
+Bước này chỉ xóa các kết quả đang hiển thị trong notebook, không xóa dữ liệu hoặc các file kết quả trong thư mục `outputs/`.
+
+### Bước 5. Chạy toàn bộ notebook
+
+Chọn:
+
+**Run All**
+
+Notebook sẽ thực hiện toàn bộ quy trình phân tích từ chuẩn bị dữ liệu, xây dựng danh mục, tính VaR, GARCH và ES, backtesting đến stress test.
+
+Các kết quả sẽ:
+
+* **Hiển thị trực tiếp trong notebook** trong quá trình chạy.
+* **Được lưu vào `outputs/`** theo các file kết quả tương ứng.
+
+### Bước 6. Kiểm tra kết quả
+
+Sau khi notebook chạy hoàn tất, kiểm tra:
+
+```text
+outputs/
+├── figures/
+└── tables/
+```
+
+Các kết quả tạo ra có thể được đối chiếu với các kết quả nghiên cứu đã được lưu trong repository.
+
+---
+
