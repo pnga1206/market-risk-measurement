@@ -44,6 +44,7 @@ LOG_RETURNS = True
 SCALE = 1.15                # hệ số phóng chữ toàn trang
 PLOT_SCALE = SCALE
 OOS_KEYS = {"2008": "2008-2009", "2020": "2020", "2022": "2022"}
+OOS_LABEL = {"2008": "2008–2009", "2020": "2020", "2022": "2022"}
 VAR_COLS = [("VaR_Historical", "Historical"), ("VaR_Parametric", "Parametric"),
             ("VaR_MonteCarlo", "Monte Carlo"), ("VaR_GARCH", "GARCH")]
 
@@ -66,17 +67,21 @@ html, body, .stApp, p, li, label, h1, h2, h3, h4, td, th, input, button { font-f
 .hero p { color: #EAF6FF; font-size: 1.05rem; margin: 0; }
 .sec-title { font-size: 1.45rem; font-weight: 800; color: #0F2A43; margin: 1.6rem 0 .2rem 0; }
 .sec-desc { color: #64748B; font-size: 1rem; margin: 0 0 .9rem 0; }
+.part-title { font-size: 1.2rem; font-weight: 800; color: #1D4ED8; margin: 1.2rem 0 .3rem 0;
+              padding: 6px 14px; background: #EFF6FF; border-left: 5px solid #2563EB; border-radius: 8px; }
+.part-title.oos { color: #B91C1C; background: #FEF2F2; border-left-color: #EF4444; }
 .stTabs [data-baseweb="tab-list"] { gap: 6px; background: #fff; padding: 8px; border-radius: 999px;
         border: 1px solid #DCE7F3; box-shadow: 0 4px 14px rgba(15, 42, 67, .06); flex-wrap: wrap; margin-bottom: 8px; }
 .stTabs [data-baseweb="tab"] { height: 46px; padding: 0 22px; border-radius: 999px; background: transparent; }
-.stTabs [data-baseweb="tab"] p { font-size: 1rem; font-weight: 700; color: #475569; }
-.stTabs [aria-selected="true"] { background: linear-gradient(90deg, #2563EB, #14B8A6); }
-.stTabs [aria-selected="true"] p { color: #fff; }
+.stTabs [data-baseweb="tab"] p { font-size: 1rem; font-weight: 700; color: #000 !important; }
+.stTabs [aria-selected="true"] { background: linear-gradient(90deg, #BFDBFE, #99F6E4); }
+.stTabs [aria-selected="true"] p { color: #000 !important; }
 .stTabs [data-baseweb="tab-highlight"], .stTabs [data-baseweb="tab-border"] { display: none; }
 .card { background: #fff; border: 1px solid #DCE7F3; border-left: 6px solid var(--accent, #2563EB);
         border-radius: 18px; padding: 16px 20px; box-shadow: 0 4px 14px rgba(15, 42, 67, .05);
         display: flex; flex-direction: column; justify-content: flex-start; overflow: hidden; margin-bottom: 14px; }
 .card.s { height: 10rem; } .card.m { height: 13.5rem; } .card.l { height: 17rem; } .card.xl { height: 22rem; }
+.card.auto { height: auto; }
 .card .t { font-size: .95rem; font-weight: 700; color: #64748B; }
 .card .v { font-size: 1.9rem; font-weight: 800; color: #0F2A43; margin: 4px 0 2px 0; line-height: 1.2; }
 .card .h { font-size: 1.15rem; font-weight: 800; color: #0F2A43; margin: 4px 0 6px 0; }
@@ -151,6 +156,11 @@ def list_card(head, items, color=C["blue"], size="l"):
 
 def section(title, desc=""):
     st.markdown(f'<div class="sec-title">{title}</div><div class="sec-desc">{desc}</div>', unsafe_allow_html=True)
+
+
+def part(title, oos=False):
+    """Tiêu đề phần lớn (A: trong mẫu, B: ngoài mẫu)."""
+    st.markdown(f'<div class="part-title{" oos" if oos else ""}">{title}</div>', unsafe_allow_html=True)
 
 
 def howto(text):
@@ -394,10 +404,12 @@ def oos_table(key):
     return _merge_bt(load_table(f"stress_oos_{key}_kupiec.csv"), load_table(f"stress_oos_{key}_christoffersen.csv"))
 
 
-def html_bt(bt, remark=False):
+def html_bt(bt, remark=False, group=None):
     """Bảng backtest: số vi phạm, p-value và kết luận của Kupiec, Độc lập, Conditional Coverage.
-    remark=True thêm cột Nhận xét (cần đủ ba cột reject_*)."""
+    remark=True thêm cột Nhận xét (cần đủ ba cột reject_*); group = tên cột giai đoạn nếu bảng gộp nhiều giai đoạn."""
     d = pd.DataFrame({"Mô hình": bt["Phương pháp"].astype(str)})
+    if group and group in bt.columns:
+        d.insert(0, "Giai đoạn", bt[group].astype(str))
     tones = {}
     if "n_obs" in bt.columns:
         d["Số ngày"] = bt["n_obs"].astype(int)
@@ -440,6 +452,21 @@ def worst_stress():
         periods = ["2008–2009", "2020", "2022"]
         label = periods[i] if len(comp) == len(periods) and isinstance(i, (int, np.integer)) else str(i)
     return label, col, float(comp.loc[i, col]), comp[col]
+
+
+def oos_long():
+    """Gộp ba bảng backtest ngoài mẫu thành một bảng dài (thêm cột Giai đoạn)."""
+    parts = []
+    for y, t in oos_all.items():
+        d = t.copy()
+        d["Giai đoạn"] = OOS_LABEL.get(y, y)
+        parts.append(d)
+    return pd.concat(parts, ignore_index=True) if parts else pd.DataFrame()
+
+
+def _norm(s):
+    """Chuẩn hóa tên mô hình để so khớp ('Monte Carlo' == 'MonteCarlo')."""
+    return re.sub(r"[^a-z]", "", str(s).lower())
 
 
 # ============================================================
@@ -485,13 +512,11 @@ with tabs[0]:
               "Nghiên cứu đo lường rủi ro thị trường của danh mục VN-Index và S&amp;P 500 bằng bốn mô hình VaR (Historical, Parametric, Monte Carlo, GARCH), "
               "kết hợp Expected Shortfall 97,5%, sau đó kiểm định khả năng dự báo bằng Kupiec và Christoffersen và thử lại trong ba giai đoạn khủng hoảng.",
               C["blue"], "m")
-    section("2. Cấu hình nghiên cứu", "Toàn bộ mô hình dùng chung một bộ tham số để so sánh công bằng.")
+    section("2. Cấu hình mô hình", "Toàn bộ mô hình dùng chung một bộ tham số để so sánh công bằng.")
     html_table(pd.DataFrame({
-        "Thành phần": ["Danh mục", "Dữ liệu chính", "Dữ liệu stress 2008", "Lợi suất", "Mức tin cậy", "Kỳ hạn",
-                       "Cửa sổ trượt", "Monte Carlo", "Hạt giống ngẫu nhiên"],
-        "Thiết lập": [f"{W_VN}% VN-Index + {W_US}% S&P 500 (tỷ trọng cố định)", DATA_SPAN,
-                      "01/01/2007 – 31/12/2009", "Lợi suất logarit", vn(f"{CONF:.1%}"), "1 ngày",
-                      f"{WINDOW} phiên", f"{MC_SIMULATIONS:,} kịch bản mỗi ngày".replace(",", "."), f"{RANDOM_SEED} (cộng chỉ số ngày)"],
+        "Thành phần": ["Mức tin cậy", "Kỳ hạn", "Cửa sổ trượt", "Monte Carlo", "Hạt giống ngẫu nhiên"],
+        "Thiết lập": [vn(f"{CONF:.1%}"), "1 ngày", f"{WINDOW} phiên",
+                      f"{MC_SIMULATIONS:,} kịch bản mỗi ngày".replace(",", "."), f"{RANDOM_SEED} (cộng chỉ số ngày)"],
     }))
 
     section("3. Ba câu hỏi nghiên cứu", "Ba câu hỏi nghiên cứu (RQ1–RQ3) của đề án; kiểm định Kupiec – Christoffersen là công cụ kiểm chứng dùng chung cho cả ba.")
@@ -534,10 +559,22 @@ with tabs[1]:
         "Vai trò": ["Đại diện thị trường cổ phiếu Việt Nam", "Đại diện thị trường cổ phiếu Mỹ",
                     "Quy đổi lợi suất S&P 500 sang VND", "Đối tượng đo lường rủi ro"],
     }))
-    howto(f"Dữ liệu chính được cố định đến <b>{DATA_FREEZE_DATE}</b>. Giai đoạn stress 2008 dùng mẫu riêng 01/01/2007 – 31/12/2009 "
+    howto(f"Dữ liệu chính: <b>{DATA_SPAN}</b>, chốt ngày <b>{DATA_FREEZE_DATE}</b>. Giai đoạn stress 2008 dùng mẫu riêng 01/01/2007 – 31/12/2009 "
           "vì nằm ngoài khoảng dữ liệu chính và thị trường Việt Nam thời đó có cấu trúc khác nhiều so với hiện nay.")
 
-    section("2. Dữ liệu danh mục", "Hai chỉ số cấu thành và diễn biến của danh mục kết hợp.")
+    section("2. Nguyên tắc xử lý dữ liệu", "Các bước xử lý áp dụng cho mẫu chính trước khi đưa vào mô hình.")
+    html_table(pd.DataFrame({
+        "Bước": ["Đồng bộ ngày", "Quy đổi tỷ giá", "Tính lợi suất", "Xây dựng danh mục", "Ngoại lệ"],
+        "Thiết lập": ["Inner Join", "S&P 500 x USD/VND", "Lợi suất logarit", f"{W_VN}% VN-Index + {W_US}% S&P 500",
+                      "Giữ nguyên, không loại bỏ"],
+        "Mục đích": ["Chỉ giữ các ngày cả hai thị trường cùng giao dịch, không tạo giá giả.",
+                     "Hai lợi suất chỉ cộng được khi cùng đồng tiền VND.",
+                     "Có tính cộng theo thời gian, phù hợp mô hình tham số và GARCH.",
+                     "Đo rủi ro nội tại của cấu trúc tài sản, không phải một chiến lược phân bổ.",
+                     "Các phiên giảm mạnh chính là rủi ro đuôi cần đo; cắt bỏ sẽ làm mô hình đánh giá thấp rủi ro."],
+    }))
+
+    section("3. Dữ liệu danh mục", "Hai chỉ số cấu thành và diễn biến của danh mục kết hợp.")
     if raw.empty:
         warn("Chưa tìm thấy file dữ liệu trong <code>data/main/</code>. Dashboard vẫn hiển thị được các kết quả trong <code>outputs/tables/</code>.")
     else:
@@ -585,7 +622,7 @@ with tabs[1]:
             howto("Biên độ dao động không đều: các phiên lãi/lỗ lớn đi liền nhau thành cụm (rõ nhất quanh tháng 3/2020) rồi mới dịu dần. "
                   "Đây là hiện tượng co cụm biến động, cơ sở để đưa GARCH(1,1) vào mô hình.")
 
-    section("3. Kiểm tra phân phối lợi suất", "Đây là cơ sở để chọn mô hình: lợi suất thực tế có giống phân phối chuẩn không?")
+    section("4. Kiểm tra phân phối lợi suất", "Đây là cơ sở để chọn mô hình: lợi suất thực tế có giống phân phối chuẩn không?")
     if len(returns) == 0:
         warn("Không có dữ liệu thô để thực hiện thống kê mô tả.")
     else:
@@ -623,18 +660,21 @@ with tabs[1]:
             flags = tests["flag"].tolist()
             html_table(t.drop(columns="flag"), {"Kết luận": ["warn" if f else "good" for f in flags]})
 
-    section("4. Nguyên tắc xử lý dữ liệu")
-    html_table(pd.DataFrame({
-        "Bước": ["Đồng bộ ngày", "Quy đổi tỷ giá", "Tính lợi suất", "Xây dựng danh mục", "Ngoại lệ", "Dữ liệu stress"],
-        "Thiết lập": ["Inner Join", "S&P 500 x USD/VND", "Lợi suất logarit", f"{W_VN}% VN-Index + {W_US}% S&P 500",
-                      "Giữ nguyên, không loại bỏ", "2008–2009, 2020, 2022"],
-        "Mục đích": ["Chỉ giữ các ngày cả hai thị trường cùng giao dịch, không tạo giá giả.",
-                     "Hai lợi suất chỉ cộng được khi cùng đồng tiền VND.",
-                     "Có tính cộng theo thời gian, phù hợp mô hình tham số và GARCH.",
-                     "Đo rủi ro nội tại của cấu trúc tài sản, không phải một chiến lược phân bổ.",
-                     "Các phiên giảm mạnh chính là rủi ro đuôi cần đo; cắt bỏ sẽ làm mô hình đánh giá thấp rủi ro.",
-                     "Đánh giá mô hình khi thị trường biến động mạnh."],
-    }))
+
+# ============================================================
+# HÀM DÙNG CHUNG: LỢI SUẤT THỰC TẾ THEO NGÀY (cho biểu đồ VaR)
+# ============================================================
+def actual_returns():
+    """Lợi suất thực tế theo ngày: ưu tiên cột actual_return của backtest_violations, nếu không có thì lấy từ dữ liệu thô."""
+    if vio.empty:
+        return pd.DataFrame(columns=["Date", "ret"])
+    if "actual_return" in vio.columns:
+        return vio[["Date", "actual_return"]].rename(columns={"actual_return": "ret"})
+    if not raw.empty and rcol:
+        a = raw[["Date", rcol]].rename(columns={rcol: "ret"})
+        return a[a["Date"] >= vio["Date"].min()]
+    return pd.DataFrame(columns=["Date", "ret"])
+
 
 # ============================================================
 # TAB 3: MÔ HÌNH VAR
@@ -645,13 +685,7 @@ def violation_section():
     if vio.empty:
         missing_file("backtest_violations.csv")
         return
-    if "actual_return" in vio.columns:
-        act = vio[["Date", "actual_return"]].rename(columns={"actual_return": "ret"})
-    elif not raw.empty and rcol:
-        act = raw[["Date", rcol]].rename(columns={rcol: "ret"})
-        act = act[act["Date"] >= vio["Date"].min()]
-    else:
-        act = pd.DataFrame(columns=["Date", "ret"])
+    act = actual_returns()
     fig = go.Figure()
     if len(act):
         fig.add_trace(go.Scatter(x=act["Date"], y=act["ret"] * 100, name="Lợi suất thực tế",
@@ -669,7 +703,8 @@ def violation_section():
                                  marker=dict(color=MODEL_COLORS.get(pick_m, C["coral"]), size=10, line=dict(color="#fff", width=1.5))))
     fig.update_yaxes(title="Lợi suất / ngưỡng VaR (%)", ticksuffix="%")
     show(style_fig(fig, "Lợi suất thực tế và ngưỡng VaR", 500))
-    howto("Mỗi lần đường xám cắt xuống dưới một đường VaR là một vi phạm. Chấm màu mọc sát nhau thành đám cho thấy mô hình phản ứng chậm khi thị trường chuyển sang giai đoạn biến động.")
+    howto("Mỗi lần đường xám cắt xuống dưới một đường VaR là một vi phạm. Chấm màu mọc sát nhau thành đám cho thấy mô hình phản ứng chậm khi thị trường chuyển sang giai đoạn biến động. "
+          "Số ngày vi phạm và kết quả kiểm định của từng mô hình xem ở tab Backtesting.")
 
 
 with tabs[2]:
@@ -712,72 +747,89 @@ with tabs[2]:
                  f"(chênh lệch trung bình chỉ {d2(abs(mv['Monte Carlo'] - mv['Parametric']) * 100, 3)} điểm phần trăm, do sai số lấy mẫu). "
                  "Về thực chất chỉ có hai quan điểm độc lập: Historical và phân phối chuẩn.")
 
-    section("3. Kiểm tra vi phạm VaR", "Một vi phạm xảy ra khi lợi suất thực tế nằm thấp hơn ngưỡng VaR của ngày đó.")
+    section("3. Lợi suất thực tế so với ngưỡng VaR", "Một vi phạm xảy ra khi lợi suất thực tế nằm thấp hơn ngưỡng VaR của ngày đó.")
     violation_section()
 
 # ============================================================
 # TAB 4: GARCH & ES
 # ============================================================
 with tabs[3]:
-    section("1. GARCH(1,1) và Expected Shortfall", "GARCH cho VaR co giãn theo biến động của thị trường; ES cho biết mức lỗ trung bình khi VaR bị vượt.")
-    howto("Với mỗi cửa sổ 250 phiên, GARCH(1,1) dự báo độ biến động cho ngày kế tiếp, từ đó tính GARCH-VaR và ES ở mức 97,5%. "
-          "Dashboard đọc trực tiếp kết quả từ <code>garch_var_es_rolling_975.csv</code>, không ước lượng lại GARCH để tránh lệch với pipeline nghiên cứu.")
+    gdf = garch_out.sort_values("Date") if not garch_out.empty else garch_out
+
+    # 1. Biến động có điều kiện
+    section("1. Biến động có điều kiện từ GARCH(1,1)", "Điểm xuất phát: GARCH ước lượng độ biến động thay đổi theo thời gian.")
+    howto("Với mỗi cửa sổ 250 phiên, GARCH(1,1) dự báo độ biến động cho ngày kế tiếp. Dashboard đọc trực tiếp kết quả từ "
+          "<code>garch_var_es_rolling_975.csv</code>, không ước lượng lại để tránh lệch với pipeline nghiên cứu.")
+    if gdf.empty:
+        missing_file("garch_var_es_rolling_975.csv")
+    elif "GARCH_Volatility" in gdf.columns:
+        fv = go.Figure(go.Scatter(x=gdf["Date"], y=gdf["GARCH_Volatility"] * 100, name="Độ biến động có điều kiện",
+                                  line=dict(color=C["violet"], width=2)))
+        fv.update_yaxes(title="Độ biến động (%/ngày)", ticksuffix="%")
+        show(style_fig(fv, "Độ biến động có điều kiện từ GARCH(1,1)", 340))
+        howto("Các đỉnh tập trung theo cụm rồi giảm dần chứ không về ngay mức nền: đó là hiện tượng co cụm biến động mà GARCH nắm bắt được.")
+
+    # 2. GARCH-VaR
+    section("2. GARCH-VaR so với VaR tĩnh", "Biến động co giãn theo thị trường được chuyển thành ngưỡng VaR co giãn theo.")
+    if not gdf.empty and "VaR_GARCH" in gdf.columns:
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=gdf["Date"], y=gdf["VaR_GARCH"].abs() * 100, name="GARCH-VaR 97,5%",
+                                 line=dict(color=MODEL_COLORS["GARCH"], width=2.4)))
+        if not rolling_var.empty and "VaR_Parametric" in rolling_var.columns:
+            pv = rolling_var.sort_values("Date")
+            fig.add_trace(go.Scatter(x=pv["Date"], y=pd.to_numeric(pv["VaR_Parametric"], errors="coerce").abs() * 100,
+                                     name="Parametric VaR (không điều kiện)",
+                                     line=dict(color=MODEL_COLORS["Parametric"], width=2, dash="dot")))
+        fig.update_yaxes(title="VaR (%)", ticksuffix="%")
+        show(style_fig(fig, "GARCH-VaR và Parametric VaR 97,5%", 420))
+        howto("GARCH-VaR tăng nhanh khi thị trường biến động mạnh và hạ xuống khi yên ắng; Parametric VaR đổi chậm vì dùng độ lệch chuẩn của cả cửa sổ 250 phiên.")
+
+    # 3. Backtest GARCH vs Parametric
+    section("3. GARCH có cải thiện backtesting không?", "RQ2: so GARCH với Parametric (biến động không điều kiện).")
+    need_g = {"reject_H0", "reject_ind", "n_obs", "rate_pct"}
+    if bt.empty or not need_g.issubset(bt.columns):
+        warn("Chưa có kết quả backtest để so sánh GARCH với Parametric.")
+    else:
+        nm_ = bt["Phương pháp"].astype(str).str.lower()
+        g_row, p_row = bt[nm_.str.contains("garch")], bt[nm_.str.contains("parametric")]
+        if len(g_row) and len(p_row):
+            html_bt(bt[nm_.str.contains("parametric|garch")].reset_index(drop=True))
+            g_, p_ = g_row.iloc[0], p_row.iloc[0]
+            howto(f"Tỷ lệ vi phạm: GARCH {d2(g_['rate_pct'])}% so với Parametric {d2(p_['rate_pct'])}% (kỳ vọng 2,5%). "
+                  f"Tính độc lập: GARCH {ind_txt(g_)}, Parametric {ind_txt(p_)}. "
+                  "Cần đọc đồng thời tần suất và tính độc lập: cải thiện chỉ tiêu này không đồng nghĩa với cải thiện chỉ tiêu kia.")
+
+    # 4. Expected Shortfall
+    section("4. Expected Shortfall (ES)", "ES cho biết mức lỗ trung bình khi VaR bị vượt; đặt ES của GARCH cạnh ES lịch sử toàn mẫu.")
     v = e = np.nan
     hv = he = None
-    if garch_out.empty:
-        missing_file("garch_var_es_rolling_975.csv")
-    else:
-        df = garch_out.sort_values("Date")
-        v = df["VaR_GARCH"].abs().mean() if "VaR_GARCH" in df.columns else np.nan
-        e = df["ES_97_5"].abs().mean() if "ES_97_5" in df.columns else np.nan
+    if not gdf.empty:
+        v = gdf["VaR_GARCH"].abs().mean() if "VaR_GARCH" in gdf.columns else np.nan
+        e = gdf["ES_97_5"].abs().mean() if "ES_97_5" in gdf.columns else np.nan
         if len(returns):
             hv, he = hist_var_es(returns)
         if v and v > 0 and not pd.isna(e):
             msg = f"ES của GARCH chỉ gấp {d2(e / v)} lần GARCH-VaR do giả định phân phối chuẩn."
             if hv and he and (he / hv) > (e / v):
-                msg += (f" Trong khi ES lịch sử gấp {d2(he / hv)} lần VaR lịch sử, cho thấy giả định phân phối chuẩn của GARCH "
+                msg += (f" Trong khi ES lịch sử gấp {d2(he / hv)} lần VaR lịch sử, cho thấy giả định chuẩn của GARCH "
                         "có thể chưa phản ánh đầy đủ rủi ro ở phần đuôi.")
             takeaway(msg)
-        fig = go.Figure()
-        if "VaR_GARCH" in df.columns:
-            fig.add_trace(go.Scatter(x=df["Date"], y=df["VaR_GARCH"].abs() * 100, name="GARCH-VaR 97,5%",
-                                     line=dict(color=MODEL_COLORS["GARCH"], width=2.4)))
-        if "ES_97_5" in df.columns:
-            fig.add_trace(go.Scatter(x=df["Date"], y=df["ES_97_5"].abs() * 100, name="ES 97,5% (GARCH, chuẩn)",
-                                     line=dict(color=MODEL_COLORS["ES_97_5"], width=2.4, dash="dash")))
-        fig.update_yaxes(title="Độ lớn khoản lỗ (%)", ticksuffix="%")
-        show(style_fig(fig, "GARCH-VaR và ES 97,5% theo thời gian", 440))
-        howto("VaR (cam) tự nâng lên khi thị trường biến động mạnh và hạ xuống khi yên ắng. ES (đỏ nét đứt) luôn nằm trên VaR vì phản ánh mức lỗ trung bình ở vùng đuôi.")
-        if "GARCH_Volatility" in df.columns:
-            fv = go.Figure(go.Scatter(x=df["Date"], y=df["GARCH_Volatility"] * 100, name="Độ biến động có điều kiện",
-                                      line=dict(color=C["violet"], width=2)))
-            fv.update_yaxes(title="Độ biến động (%/ngày)", ticksuffix="%")
-            show(style_fig(fv, "Độ biến động có điều kiện từ GARCH(1,1)", 340))
-            howto("Các đỉnh tập trung theo cụm rồi giảm dần chứ không về ngay mức nền: đó là hiện tượng co cụm biến động mà GARCH nắm bắt được.")
-
-        section("2. Tóm tắt GARCH và ES", "Tỷ lệ ES/VaR của GARCH (giả định chuẩn) đặt cạnh ES/VaR lịch sử toàn mẫu (không giả định chuẩn).")
+        if "ES_97_5" in gdf.columns:
+            fe = go.Figure()
+            if "VaR_GARCH" in gdf.columns:
+                fe.add_trace(go.Scatter(x=gdf["Date"], y=gdf["VaR_GARCH"].abs() * 100, name="GARCH-VaR 97,5%",
+                                        line=dict(color=MODEL_COLORS["GARCH"], width=2.4)))
+            fe.add_trace(go.Scatter(x=gdf["Date"], y=gdf["ES_97_5"].abs() * 100, name="ES 97,5% (GARCH, chuẩn)",
+                                    line=dict(color=MODEL_COLORS["ES_97_5"], width=2.4, dash="dash")))
+            fe.update_yaxes(title="Độ lớn khoản lỗ (%)", ticksuffix="%")
+            show(style_fig(fe, "GARCH-VaR và ES 97,5% theo thời gian", 400))
+            howto("ES (đỏ nét đứt) luôn nằm trên VaR vì phản ánh mức lỗ trung bình ở vùng đuôi.")
         m1, m2, m3, m4 = st.columns(4)
         with m1: card("ES / VaR của GARCH", f"{d2(e / v)} lần" if v and v > 0 else "—",
                       f"Cố định ≈ {d2(ES_VAR_NORMAL)} do giả định chuẩn", C["violet"])
         with m2: card("ES / VaR lịch sử", f"{d2(he / hv)} lần" if hv and he else "—", "Toàn mẫu, không giả định chuẩn", C["blue"])
         with m3: card("VaR lịch sử toàn mẫu", pct(hv) if hv else "—", "Phân vị 2,5% của lợi suất", C["sky"])
         with m4: card("ES lịch sử toàn mẫu", pct(he) if he else "—", "Trung bình phần đuôi 2,5%", C["teal"])
-
-    section("3. GARCH so với biến động không điều kiện", "RQ2: GARCH có cải thiện kết quả backtesting so với Parametric (độ lệch chuẩn cửa sổ 250 phiên, không điều kiện) không?")
-    need_g = {"reject_H0", "reject_ind", "n_obs", "rate_pct"}
-    if bt.empty or not need_g.issubset(bt.columns):
-        warn("Chưa có kết quả backtest để so sánh GARCH với Parametric.")
-    else:
-        nm_ = bt["Phương pháp"].astype(str).str.lower()
-        sub = bt[nm_.str.contains("parametric|garch")].reset_index(drop=True)
-        g_row = bt[nm_.str.contains("garch")]
-        p_row = bt[nm_.str.contains("parametric")]
-        if len(g_row) and len(p_row):
-            html_bt(sub)
-            g_, p_ = g_row.iloc[0], p_row.iloc[0]
-            howto(f"Tỷ lệ vi phạm: GARCH {d2(g_['rate_pct'])}% so với Parametric {d2(p_['rate_pct'])}% (kỳ vọng 2,5%). "
-                  f"Tính độc lập: GARCH {ind_txt(g_)}, Parametric {ind_txt(p_)}. "
-                  "Cần đọc đồng thời tần suất và tính độc lập: cải thiện chỉ tiêu này không đồng nghĩa với cải thiện chỉ tiêu kia.")
 
     warn("GARCH hiện dùng phân phối chuẩn, hằng số trung bình và có cơ chế dự phòng EWMA khi ước lượng lỗi. GARCH phản ứng nhanh hơn "
          "không có nghĩa là ít vi phạm hơn các mô hình tĩnh: xem tab Backtesting. ES ở đây chưa được backtest.")
@@ -836,8 +888,8 @@ with tabs[4]:
             howto("Cột vượt xa đường đứt nét ở năm nào nghĩa là mô hình đánh giá thấp rủi ro ở năm đó; năm biến động mạnh thường là năm vi phạm tập trung.")
 
     chr_ = load_table("christoffersen_results.csv")
-    section("3. Thống kê LR", "Giá trị thống kê của ba kiểm định; kết luận đạt/không đạt và p-value đã có ở bảng mục 1.")
-    with st.expander("Xem thống kê LR của Kupiec và Christoffersen"):
+    section("3. Chi tiết thống kê", "Thống kê LR và p-value của từng kiểm định (kết luận đạt/không đạt đã có ở bảng mục 1).")
+    with st.expander("Xem thống kê LR và biểu đồ p-value"):
         lr_cols = [("LR_statistic", "LR Kupiec (UC)"), ("LR_ind", "LR độc lập (IND)"), ("LR_cc", "LR có điều kiện (CC)")]
         if bt.empty or not any(c in bt.columns for c, _ in lr_cols):
             warn("Chưa có thống kê LR trong kết quả kiểm định.")
@@ -847,25 +899,73 @@ with tabs[4]:
                 if c_ in bt.columns:
                     lr_df[name_] = bt[c_].map(lambda v: d2(v, 3))
             html_table(lr_df)
-
-    section("4. So sánh p-value", "Cột nào nằm dưới đường 5% nghĩa là mô hình bị bác bỏ ở kiểm định đó.")
-    if not chr_.empty and "Phương pháp" in chr_.columns:
-        fig = go.Figure()
-        for col, label in [("p_value_uc", "Unconditional Coverage"), ("p_value_ind", "Independence"), ("p_value_cc", "Conditional Coverage")]:
-            if col in chr_.columns:
-                fig.add_trace(go.Bar(x=chr_["Phương pháp"], y=chr_[col], name=label))
-        fig.add_hline(y=0.05, line_dash="dash", line_color=C["ink"], annotation_text="α = 5%")
-        fig.update_layout(barmode="group", hovermode="closest")
-        fig.update_yaxes(title="p-value")
-        show(style_fig(fig, "p-value của các kiểm định Christoffersen", 420))
-    else:
-        missing_file("christoffersen_results.csv")
+        if not chr_.empty and "Phương pháp" in chr_.columns:
+            fig = go.Figure()
+            for col, label in [("p_value_uc", "Unconditional Coverage"), ("p_value_ind", "Independence"), ("p_value_cc", "Conditional Coverage")]:
+                if col in chr_.columns:
+                    fig.add_trace(go.Bar(x=chr_["Phương pháp"], y=chr_[col], name=label))
+            fig.add_hline(y=0.05, line_dash="dash", line_color=C["ink"], annotation_text="α = 5%")
+            fig.update_layout(barmode="group", hovermode="closest")
+            fig.update_yaxes(title="p-value")
+            show(style_fig(fig, "p-value của các kiểm định Christoffersen", 420))
+            howto("Cột nằm dưới đường 5% nghĩa là mô hình bị bác bỏ ở kiểm định đó.")
+        else:
+            missing_file("christoffersen_results.csv")
     warn("Không nên kết luận một mô hình là “tốt nhất” chỉ từ một chỉ tiêu. Kupiec xét tỷ lệ vi phạm, Christoffersen bổ sung tính độc lập và độ phủ có điều kiện.")
 
 # ============================================================
 # TAB 6: STRESS TEST
 # ============================================================
+OOS_RANGE = {"2020": ("2020-01-01", "2020-12-31"), "2022": ("2022-01-01", "2022-12-31")}
+
+
+@_fragment
+def oos_timeline():
+    """Lợi suất thực tế so với VaR theo ngày trong giai đoạn stress (lấy từ backtest_violations.csv của mẫu chính)."""
+    if vio.empty:
+        missing_file("backtest_violations.csv")
+        return
+    pick = st.radio("Giai đoạn", list(OOS_RANGE), horizontal=True, key="oos_period")
+    model = st.radio("Mô hình", [n for _, n in VAR_COLS], horizontal=True, key="oos_model")
+    col = next(c for c, n in VAR_COLS if n == model)
+    if col not in vio.columns:
+        warn(f"Không có cột {col} trong backtest_violations.csv.")
+        return
+    act = actual_returns()
+    if act.empty:
+        warn("Không có lợi suất thực tế theo ngày để vẽ biểu đồ.")
+        return
+    a, b = OOS_RANGE[pick]
+    d = vio[["Date", col]].merge(act, on="Date", how="inner")
+    d = d[(d["Date"] >= a) & (d["Date"] <= b)].sort_values("Date")
+    if d.empty:
+        warn("Không có dữ liệu VaR theo ngày cho giai đoạn này.")
+        return
+    bad = d[d["ret"] < -d[col].abs()]
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=d["Date"], y=d["ret"] * 100, name="Lợi suất thực tế",
+                             line=dict(color=MODEL_COLORS["Actual"], width=1.2)))
+    fig.add_trace(go.Scatter(x=d["Date"], y=-d[col].abs() * 100, name=f"VaR {model}",
+                             line=dict(color=MODEL_COLORS.get(model, C["blue"]), width=2)))
+    fig.add_trace(go.Scatter(x=bad["Date"], y=bad["ret"] * 100, mode="markers", name=f"Vi phạm ({len(bad)})",
+                             marker=dict(color=C["coral"], size=10, line=dict(color="#fff", width=1.5))))
+    fig.update_yaxes(title="%", ticksuffix="%")
+    show(style_fig(fig, f"Lợi suất thực tế và VaR {model} ngoài mẫu, {pick}", 420))
+    howto("Chấm đỏ là ngày lỗ thực tế vượt VaR của chính ngày đó. Chấm mọc sát nhau thành đám là vi phạm dồn cụm, "
+          "thường rơi vào đợt sốc như 12/03/2020.")
+    # Đối chiếu với bảng kiểm định ngoài mẫu để người xem biết hai nguồn có khớp không
+    t = oos_all.get(pick)
+    if t is not None and "n_violations" in t.columns:
+        r_ = t[t["Phương pháp"].map(_norm) == _norm(model)]
+        if len(r_):
+            k_tab = int(r_["n_violations"].iloc[0])
+            if k_tab != len(bad):
+                st.caption(f"Lưu ý: biểu đồ đếm {len(bad)} vi phạm từ file backtest toàn mẫu, bảng kiểm định ngoài mẫu ghi {k_tab}. "
+                           "Hai nguồn có thể khác nhau do cách chọn mẫu đánh giá; số liệu chính thức là của bảng kiểm định.")
+
+
 with tabs[5]:
+    # ---------- 1. Thiết kế ----------
     section("1. Thiết kế stress test", "Ba giai đoạn đại diện cho ba kiểu thị trường căng thẳng.")
     html_table(pd.DataFrame({
         "Giai đoạn": ["2008–2009", "2020", "2022"],
@@ -873,11 +973,12 @@ with tabs[5]:
         "Thời gian": ["01/01/2007 – 31/12/2009 (ước lượng từ 2007, OOS từ 2008)", "01/01/2020 – 31/12/2020", "01/01/2022 – 31/12/2022"],
         "Nguồn dữ liệu": ["data/stress_2008/ (mẫu riêng)", "data/main/", "data/main/"],
     }))
-    howto("Mỗi giai đoạn trình bày hai lớp: kết quả trong mẫu (chỉ mô tả, vì VaR Historical được ước lượng từ chính giai đoạn đó) "
-          "và backtest ngoài mẫu. Backtest ngoài mẫu phản ánh khả năng dự báo của mô hình trên dữ liệu không được dùng để ước lượng, "
-          "nên phù hợp hơn để đánh giá khả năng bao phủ VaR.")
+    howto("Mỗi giai đoạn được đọc theo hai lớp. <b>Phần A (trong mẫu)</b> chỉ mô tả rủi ro trên chính dữ liệu giai đoạn đó, vì VaR Historical được ước lượng từ chính mẫu này. "
+          "<b>Phần B (ngoài mẫu)</b> mới là phần đánh giá khả năng dự báo: VaR rolling chỉ dùng dữ liệu trước ngày đánh giá. Kết luận về mô hình dựa vào Phần B.")
 
-    section("2. So sánh các giai đoạn")
+    # ---------- Phần A: trong mẫu ----------
+    part("Phần A — Trong mẫu (chỉ để mô tả)")
+    section("2. Rủi ro trong từng giai đoạn", "Độ biến động, tổn thất ngày lớn nhất, VaR và ES tính trên chính dữ liệu của giai đoạn.")
     ws = worst_stress()
     if stress_comp.empty:
         missing_file("stress_test_comparison.csv")
@@ -899,7 +1000,7 @@ with tabs[5]:
         for c_ in cn:
             disp[c_] = [fmt_metric(x, c_, stress_comp[c_]) for x in stress_comp[c_]]
         html_table(disp)
-        warn("Các chỉ tiêu trong bảng tính trên chính dữ liệu của từng giai đoạn (trong mẫu), chỉ có giá trị mô tả. Tổn thất thực tế là lợi suất ngày thấp nhất, không phải mức lỗ tích lũy cả giai đoạn.")
+        warn("Các chỉ tiêu trên tính từ chính dữ liệu của từng giai đoạn, chỉ có giá trị mô tả. Tổn thất thực tế là lợi suất ngày thấp nhất, không phải mức lỗ tích lũy cả giai đoạn.")
         fv = go.Figure()
         for c, l in VAR_COLS:
             col = next((x for x in cn if x.startswith(c)), None)
@@ -916,75 +1017,76 @@ with tabs[5]:
         if fv.data:
             fv.update_layout(barmode="group", hovermode="closest")
             fv.update_yaxes(title="%")
-            show(style_fig(fv, "So sánh VaR và ES giữa các giai đoạn stress", 440))
+            show(style_fig(fv, "So sánh VaR và ES giữa các giai đoạn stress (trong mẫu)", 440))
             txt_ = "Cột càng cao nghĩa là mô hình dự báo mức lỗ càng lớn trong giai đoạn đó. "
             if loss_cols:
-                txt_ += "Hình thoi là độ lớn lợi suất ngày thấp nhất của giai đoạn. "
-            txt_ += ("So sánh VaR với mức lợi suất thấp nhất giúp minh họa khoảng cách giữa mức lỗ VaR và một cú sốc cực đoan trong từng giai đoạn. "
-                     "Khả năng bao phủ VaR được đánh giá chính thức qua backtest ngoài mẫu.")
+                txt_ += "Hình thoi là độ lớn lợi suất ngày thấp nhất của giai đoạn: nằm trên đỉnh cột VaR nghĩa là ngày tệ nhất vượt ngưỡng VaR trung bình đó. "
+            txt_ += "Đây chỉ là bức tranh mô tả; khả năng bao phủ của VaR được đánh giá ở Phần B."
             howto(txt_)
 
-    def stress_block(year, filename):
-        detail = load_table(filename)
-        if detail.empty:
-            missing_file(filename)
-        else:
-            dd = detail.copy()
+    with st.expander("Tỷ lệ vi phạm trong mẫu (chỉ để tham khảo, không dùng để kết luận)"):
+        st.caption("VaR Historical trong mẫu được ước lượng từ chính dữ liệu đang đếm vi phạm nên tỷ lệ gần 2,5% là kết quả tự nhiên, "
+                   "không chứng minh mô hình dự báo tốt. Hãy so với kết quả ngoài mẫu ở Phần B.")
+        any_detail = False
+        for yr, fn in [("2008–2009", "stress_2008_detail.csv"), ("2020", "stress_2020_detail.csv"), ("2022", "stress_2022_detail.csv")]:
+            detail = load_table(fn)
+            if detail.empty:
+                missing_file(fn)
+                continue
+            any_detail = True
+            dd = detail.drop(columns=[c for c in detail.columns if "unnamed" in c.lower()]).copy()
             for c_ in dd.select_dtypes("number").columns:
                 dd[c_] = [fmt_metric(x, c_, detail[c_]) for x in detail[c_]]
+            st.markdown(f"**{yr}**")
             html_table(dd)
-            rate_cols = [c for c in detail.columns if "vi phạm" in c.lower() and "%" in c]
-            name_cols = [c for c in detail.columns if detail[c].dtype == object]
-            if rate_cols and name_cols:
-                r_ = detail[rate_cols[0]]
-                hi_i, lo_i = r_.idxmax(), r_.idxmin()
-                howto(f"Trong mẫu, tỷ lệ vi phạm cao nhất là {d2(r_[hi_i])}% ({detail.loc[hi_i, name_cols[0]]}) và thấp nhất là {d2(r_[lo_i])}% ({detail.loc[lo_i, name_cols[0]]}), "
-                      f"so với mức kỳ vọng {d2(P0_PCT, 1)}%. Con số của Historical gần kỳ vọng một phần vì VaR được ước lượng từ chính giai đoạn này.")
-        st.markdown(f"##### Backtest ngoài mẫu — {year}")
-        oos = oos_all.get(year)
-        if oos is None:
-            warn(f"Chưa có file <code>stress_oos_{OOS_KEYS[year]}_kupiec.csv</code> và <code>stress_oos_{OOS_KEYS[year]}_christoffersen.csv</code>.")
+
+    # ---------- Phần B: ngoài mẫu ----------
+    part("Phần B — Ngoài mẫu (đánh giá chính)", oos=True)
+    section("3. Khả năng dự báo ngoài mẫu",
+            "VaR rolling chỉ dùng dữ liệu trước ngày đánh giá. Giai đoạn 2008–2009 bắt đầu đánh giá từ 17/01/2008 (cần dữ liệu khởi động cửa sổ rolling), "
+            "nên có 469 ngày thay vì 719 như phần trong mẫu.")
+    ol = oos_long()
+    if ol.empty:
+        warn("Chưa có các file <code>stress_oos_*_kupiec.csv</code> và <code>stress_oos_*_christoffersen.csv</code> trong <code>outputs/tables/</code>.")
+    else:
+        hi_r = ol.loc[ol["rate_pct"].idxmax()]
+        if (ol["rate_pct"] > P0_PCT).all():
+            takeaway(f"Mọi mô hình ở mọi giai đoạn đều vượt mức kỳ vọng {d2(P0_PCT, 1)}% "
+                     f"({pu(ol['rate_pct'].min())} – {pu(ol['rate_pct'].max())}); "
+                     f"cao nhất là {hi_r['Phương pháp']} giai đoạn {hi_r['Giai đoạn']} ({pu(hi_r['rate_pct'])}).")
         else:
-            html_bt(oos)
-            if "n_obs" in oos.columns:
-                n_days = int(oos["n_obs"].max())
-                howto(f"{n_days} ngày đánh giá, kỳ vọng khoảng {d2(n_days * (1 - CONF), 1)} vi phạm mỗi mô hình. Mẫu nhỏ nên kiểm định có sức mạnh hạn chế: không bị bác bỏ không có nghĩa là mô hình đạt.")
+            takeaway(f"Tỷ lệ vi phạm ngoài mẫu dao động từ {pu(ol['rate_pct'].min())} đến {pu(ol['rate_pct'].max())} "
+                     f"so với kỳ vọng {d2(P0_PCT, 1)}%; cao nhất là {hi_r['Phương pháp']} giai đoạn {hi_r['Giai đoạn']}.")
 
-    section("3. Stress 2008–2009", "Khủng hoảng tài chính toàn cầu, dùng bộ dữ liệu stress riêng.")
-    st.caption("Giai đoạn 2008 dùng bộ dữ liệu 2007–2009 tách biệt với mẫu chính; thị trường Việt Nam thời đó có quy mô và cấu trúc khác nhiều, nên kết quả cần diễn giải thận trọng.")
-    stress_block("2008", "stress_2008_detail.csv")
-
-    section("4. Stress 2020", "Cú sốc COVID-19, giai đoạn biến động cao nhất của mẫu chính.")
-    stress_block("2020", "stress_2020_detail.csv")
-
-    section("5. Stress 2022", "Giai đoạn tăng lãi suất và căng thẳng thị trường.")
-    stress_block("2022", "stress_2022_detail.csv")
-
-    section("6. Ý nghĩa stress test", "Tổng hợp kết quả ngoài mẫu: tỷ lệ vi phạm và kết luận Kupiec (✖ bị bác bỏ, ✔ không bị bác bỏ).")
-    if oos_all:
-        periods_ = list(oos_all)
-        plabel_ = [{"2008": "2008–2009"}.get(y, y) for y in periods_]
-        models_ = list(dict.fromkeys(m for t in oos_all.values() for m in t["Phương pháp"].astype(str)))
+        # B1. Biểu đồ tỷ lệ vi phạm
+        models_ = list(dict.fromkeys(ol["Phương pháp"].astype(str)))
+        periods_ = list(dict.fromkeys(ol["Giai đoạn"]))
         fo = go.Figure()
         for m in models_:
             ys_ = []
-            for y in periods_:
-                t_ = oos_all[y]
-                r_ = t_[t_["Phương pháp"].astype(str) == m]
+            for p_ in periods_:
+                r_ = ol[(ol["Phương pháp"].astype(str) == m) & (ol["Giai đoạn"] == p_)]
                 ys_.append(float(r_["rate_pct"].iloc[0]) if len(r_) else None)
-            fo.add_trace(go.Bar(x=plabel_, y=ys_, name=m, marker_color=MODEL_COLORS.get(m, C["blue"]),
-                                text=[f"{d2(v)}%" if v is not None else "" for v in ys_], textposition="outside"))
+            fo.add_trace(go.Bar(x=periods_, y=ys_, name=m, marker_color=MODEL_COLORS.get(m, C["blue"]),
+                                text=[f"{d2(v_)}%" if v_ is not None else "" for v_ in ys_], textposition="outside"))
         fo.add_hline(y=P0_PCT, line_dash="dash", line_color=C["ink"], annotation_text=f"Kỳ vọng {d2(P0_PCT, 1)}%")
         fo.update_layout(barmode="group", hovermode="closest")
         fo.update_yaxes(title="Tỷ lệ vi phạm (%)", ticksuffix="%")
         show(style_fig(fo, "Tỷ lệ vi phạm VaR ngoài mẫu theo giai đoạn và mô hình", 420))
         howto("Cột nằm trên đường nét đứt nghĩa là tỷ lệ vi phạm cao hơn mức kỳ vọng 2,5% trong giai đoạn đó.")
-        rows_ = {}
-        for y, t in oos_all.items():
-            for _, r in t.iterrows():
-                rows_.setdefault(str(r["Phương pháp"]), {})[y] = f"{d2(r['rate_pct'])}% {'✖' if r['reject_H0'] else '✔'}"
-        summ = pd.DataFrame(rows_).T.reindex(columns=list(oos_all)).fillna("—").reset_index().rename(columns={"index": "Mô hình"})
-        html_table(summ)
+
+        # B2. Một bảng gộp
+        st.markdown("##### Kết quả kiểm định ba giai đoạn")
+        html_bt(ol.sort_values("Giai đoạn", kind="stable"), group="Giai đoạn")
+        howto("Mỗi dòng là một mô hình trong một giai đoạn: số vi phạm, tỷ lệ, rồi kết luận của Kupiec (tần suất), IND (tính độc lập) và CC (kết hợp cả hai). "
+              "Mỗi giai đoạn chỉ có khoảng 228–469 ngày (kỳ vọng 6–12 vi phạm) nên kiểm định có sức mạnh hạn chế: "
+              "không bị bác bỏ không có nghĩa là mô hình đạt.")
+
+        # B3. Diễn biến theo ngày
+        st.markdown("##### Diễn biến theo ngày")
+        st.caption("Dữ liệu theo ngày lấy từ file backtest toàn mẫu nên chỉ có 2020 và 2022; giai đoạn 2008–2009 dùng mẫu riêng chưa có chuỗi theo ngày.")
+        oos_timeline()
+
     howto("Stress test không nhằm chứng minh mô hình nào “tốt nhất”. Mục đích là cho thấy mức rủi ro và tỷ lệ vi phạm thay đổi thế nào khi thị trường chuyển sang trạng thái bất thường; "
           "mẫu mỗi giai đoạn nhỏ nên mọi kết luận cần thận trọng.")
 
@@ -992,122 +1094,36 @@ with tabs[5]:
 # TAB 7: KẾT LUẬN
 # ============================================================
 with tabs[6]:
-    section("1. Kết quả chính", "Mỗi thẻ tóm tắt một khối kết quả gắn với ba câu hỏi nghiên cứu; số liệu tính trực tiếp từ kết quả.")
-    # VaR
-    if not rolling_var.empty:
-        vm = {l: pd.to_numeric(rolling_var[c], errors="coerce").abs().mean() for c, l in VAR_COLS[:3] if c in rolling_var.columns}
-        var_body = "VaR trung bình: " + "; ".join(f"{l} {pct(x)}" for l, x in vm.items()) + ". "
-        if "Historical" in vm and "Parametric" in vm and vm["Historical"] > vm["Parametric"]:
-            var_body += "Historical cao hơn Parametric, phù hợp với đuôi dày. "
-        var_body += "Parametric và Monte Carlo gần như trùng nhau vì cùng giả định chuẩn."
-    else:
-        var_body = "Cần file rolling_var_975.csv."
-    # GARCH & ES
-    es_body = "Cần file garch_var_es_rolling_975.csv."
-    if not garch_out.empty and {"VaR_GARCH", "ES_97_5"}.issubset(garch_out.columns):
-        gv, ge = garch_out["VaR_GARCH"].abs().mean(), garch_out["ES_97_5"].abs().mean()
-        es_body = f"GARCH-VaR trung bình {pct(gv)}, ES {pct(ge)} (gấp {d2(ge / gv)} lần do giả định chuẩn). "
-        if len(returns):
-            hv_, he_ = hist_var_es(returns)
-            es_body += (f"ES lịch sử gấp {d2(he_ / hv_)} lần VaR lịch sử, "
-                        "cho thấy mức tổn thất ở phần đuôi cao hơn đáng kể so với ngưỡng VaR. ")
-        es_body += "ES chưa được backtest."
-    # Backtesting
-    bt_head, bt_body, bt_col = "Chưa có kết quả backtest", "Cần file kupiec_results.csv và christoffersen_results.csv.", C["muted"]
-    sel_txt = "Kết hợp Historical VaR và GARCH-VaR để giám sát, bổ sung ES và stress test để đánh giá rủi ro đuôi."
-    if not bt.empty and BT_NEED.issubset(bt.columns):
-        ok_k = bt.loc[~bt["reject_H0"], "Phương pháp"].tolist()
-        ok_i = bt.loc[~bt["reject_ind"], "Phương pháp"].tolist()
-        ok_c = bt.loc[~bt["reject_cc"], "Phương pháp"].tolist()
-        bt_head = "Không mô hình nào đạt cả hai tiêu chí" if not ok_c else f"{len(ok_c)}/{len(bt)} mô hình đạt cả hai tiêu chí"
-        bt_col = C["coral"] if not ok_c else C["amber"]
-        bt_body = (f"Đạt Kupiec: {', '.join(ok_k) or 'không mô hình nào'}. Đạt độc lập: {', '.join(ok_i) or 'không mô hình nào'}. "
-                   "Mô hình có tỷ lệ vi phạm gần 2,5% vẫn có thể có vi phạm dồn cụm.")
-        best_rate = bt.loc[(bt["rate_pct"] - P0_PCT).abs().idxmin(), "Phương pháp"]
-        sel_txt = (f"{best_rate} có tỷ lệ vi phạm gần kỳ vọng nhất; đạt kiểm định độc lập: {', '.join(ok_i) or 'không mô hình nào'}; "
-                   f"đạt CC: {len(ok_c)}/{len(bt)}. Nên kết hợp các mô hình bổ sung nhau (VaR lịch sử kèm VaR có điều kiện) "
-                   "thay vì chọn một mô hình duy nhất, và bổ sung ES, stress test.")
-    # Stress
-    st_head, st_body, st_col = "Chưa có kết quả stress test", "Cần file stress_oos_* và stress_test_comparison.csv.", C["muted"]
-    buffer_txt = "Chưa có kết quả stress ngoài mẫu; vẫn nên dành đệm vốn cho rủi ro mô hình."
-    ws = worst_stress()
-    if oos_all:
-        total = sum(len(t) for t in oos_all.values())
-        fail = sum(int(t["reject_H0"].sum()) for t in oos_all.values())
-        st_head = "Tỷ lệ vi phạm tăng trong các giai đoạn stress" if fail == total else "Độ bền vững khác nhau theo giai đoạn"
-        st_col = C["coral"] if fail == total else C["amber"]
-        st_body = f"Ngoài mẫu, {fail}/{total} lượt kiểm định (mô hình x giai đoạn) bị Kupiec bác bỏ. "
-        if ws:
-            st_body += f"{ws[0]} là giai đoạn có {ws[1].replace(' (%)', '')} cao nhất ({fmt_metric(ws[2], ws[1], ws[3])}). "
-        st_body += "Mẫu nhỏ nên cần diễn giải thận trọng."
-        buffer_txt = (f"Ngoài mẫu, {fail}/{total} lượt kiểm định (mô hình x giai đoạn) bị Kupiec bác bỏ"
-                      + (": mọi mô hình đều bị vượt thường xuyên hơn kỳ vọng khi stress, cần đệm vốn cho rủi ro mô hình."
-                         if fail == total else "; mức vi phạm khác nhau theo giai đoạn nhưng vẫn cần đệm vốn cho rủi ro mô hình."))
-    elif ws:
-        st_head, st_col = f"{ws[0]} là cú sốc nặng nhất", C["amber"]
-        st_body = f"Theo {ws[1]} ({fmt_metric(ws[2], ws[1], ws[3])})."
-    rq1_body, rq2_body = var_body, es_body
-    if not bt.empty and BT_NEED.issubset(bt.columns):
-        rq1_body += f" Backtest: {bt_head[0].lower() + bt_head[1:]}. {bt_body}"
-        nl_ = bt["Phương pháp"].astype(str).str.lower()
-        g_, p_ = bt[nl_.str.contains("garch")], bt[nl_.str.contains("parametric")]
-        if len(g_) and len(p_):
-            g_, p_ = g_.iloc[0], p_.iloc[0]
-            rq2_body += (f" So với Parametric (biến động không điều kiện): tỷ lệ vi phạm GARCH {d2(g_['rate_pct'])}% so với {d2(p_['rate_pct'])}%; "
-                         f"tính độc lập GARCH {ind_txt(g_)}, Parametric {ind_txt(p_)}.")
-    r1, r2, r3 = st.columns(3)
-    with r1: text_card("RQ1 — Ba phương pháp VaR", "Ba cách tính, ba mức rủi ro", rq1_body, C["blue"], "xl")
-    with r2: text_card("RQ2 — GARCH và ES", "Phản ứng nhanh với biến động; ES còn dựa trên giả định chuẩn", rq2_body, C["teal"], "xl")
-    with r3: text_card("RQ3 — Stress test", st_head, st_body, st_col, "xl")
+    section("Kết luận từ kết quả backtesting và stress test",
+            "Tổng hợp từ kiểm định Kupiec, Christoffersen và backtest ngoài mẫu ở ba giai đoạn stress.")
+    takeaway("Cả bốn mô hình đều có tỷ lệ vi phạm cao hơn 2,5%, không mô hình nào đạt đồng thời độ bao phủ lẫn tính độc lập; "
+             "trong các giai đoạn căng thẳng, tổn thất thực tế vượt VaR thường xuyên hơn mức dự báo.")
 
-    section("2. Hàm ý quản trị rủi ro")
-    html_table(pd.DataFrame({
-        "Đối tượng": ["Ngân hàng"] * 5 + ["Nhà đầu tư"] * 3,
-        "Nội dung": ["Không dựa vào một mô hình", "Lựa chọn mô hình", "Bổ sung ES và stress test", "Đệm vốn cho rủi ro mô hình", "Backtesting định kỳ",
-                     "Không dùng giả định chuẩn", "Theo dõi biến động có điều kiện", "Rủi ro tỷ giá và đa dạng hóa"],
-        "Hàm ý": ["Historical VaR cung cấp mức tham chiếu theo phân phối thực nghiệm; GARCH-VaR phản ánh biến động có điều kiện; ES bổ sung thông tin về mức độ tổn thất vượt VaR.",
-                  sel_txt,
-                  "ES 97,5% theo tinh thần FRTB (nghiên cứu không xây dựng hệ thống tính vốn FRTB đầy đủ); stress test để xác định vốn và thanh khoản.",
-                  buffer_txt,
-                  "Theo dõi đồng thời số vi phạm, tính độc lập và quy mô vi phạm, không chỉ làm một lần.",
-                  "So với Historical VaR và ES; ngày lỗ nặng thường lớn hơn nhiều so với VaR.",
-                  "Khi biến động tăng đột biến, đánh giá lại tỷ trọng và đòn bẩy thay vì chờ VaR cửa sổ trượt cập nhật.",
-                  "Cân nhắc phòng ngừa tỷ giá tùy chi phí; kiểm tra tương quan và đóng góp rủi ro trước khi dựa vào tỷ trọng 50/50."],
-    }))
+    section("1. Kết quả backtesting", "Backtesting trên 2.132 quan sát, so với mức kỳ vọng 2,5%.")
+    k1, k2, k3, k4 = st.columns(4)
+    with k1: card("Historical", "3,00%", "Tỷ lệ vi phạm", C["muted"])
+    with k2: card("Parametric", "3,47%", "Tỷ lệ vi phạm", C["blue"])
+    with k3: card("Monte Carlo", "3,42%", "Tỷ lệ vi phạm", C["teal"])
+    with k4: card("GARCH", "4,08%", "Tỷ lệ vi phạm", C["amber"])
+    howto("Tỷ lệ vi phạm của cả bốn mô hình đều cao hơn mức kỳ vọng 2,5%. Điều này gợi ý các mô hình có xu hướng đánh giá thấp "
+          "tần suất tổn thất vượt ngưỡng VaR trong mẫu đánh giá.")
+    list_card("Kết quả kiểm định bổ sung", [
+        "<b>Historical:</b> là mô hình duy nhất chưa bị Kupiec bác bỏ về tổng số vi phạm. Tuy nhiên Christoffersen vẫn phát hiện "
+        "vi phạm không độc lập và kiểm định bao phủ có điều kiện bác bỏ mô hình này.",
+        "<b>Parametric, Monte Carlo và GARCH:</b> Kupiec bác bỏ giả thuyết tỷ lệ vi phạm phù hợp với mức 2,5%.",
+        "<b>GARCH:</b> không bị bác bỏ ở kiểm định tính độc lập, nhưng vẫn bị bác bỏ ở kiểm định bao phủ có điều kiện "
+        "do kết quả tổng thể chưa đáp ứng đồng thời các yêu cầu.",
+        "<b>Tổng thể:</b> không mô hình nào thể hiện đầy đủ cả độ bao phủ lẫn tính độc lập trong kết quả backtesting hiện tại.",
+    ], C["blue"], "auto")
 
-    section("3. Hạn chế của nghiên cứu")
-    l1, l2, l3 = st.columns(3)
-    with l1: list_card("Dữ liệu", ["VN-Index và S&amp;P 500 đóng cửa lệch múi giờ nên lợi suất cùng ngày không cùng tập thông tin.",
-                                    "Inner Join loại các ngày không có đủ dữ liệu; chuỗi tỷ giá có nhiều ngày giá không đổi.",
-                                    "Mẫu stress ngắn nên kiểm định có sức mạnh hạn chế."], C["blue"], "xl")
-    with l2: list_card("Mô hình", ["Parametric và Monte Carlo dùng phân phối chuẩn; Monte Carlo không thêm thông tin đuôi.",
-                                    "GARCH(1,1) đối xứng, nhiễu chuẩn, chưa thử Student-t hay EGARCH/GJR.",
-                                    "ES tính theo phân phối chuẩn và chưa được backtest.",
-                                    "Chưa kiểm tra độ nhạy theo cửa sổ và mức tin cậy."], C["teal"], "xl")
-    with l3: list_card("Danh mục và stress", ["Tỷ trọng cố định 50:50, chưa xét tái cân bằng, chi phí giao dịch, thanh khoản.",
-                                               "Stress 2008 dùng mẫu riêng, không so sánh trực tiếp với hai giai đoạn còn lại.",
-                                               "Stress dựa trên giai đoạn lịch sử, chưa có kịch bản giả định."], C["amber"], "xl")
-
-    section("4. Hướng nghiên cứu tiếp theo")
-    list_card("Mở rộng mô hình và kiểm định", [
-        "Dùng phân phối Student-t hoặc Skewed-t cho phần dư GARCH để phản ánh đuôi dày.",
-        "Mở rộng sang GJR-GARCH hoặc EGARCH để nắm bắt tính bất đối xứng của biến động.",
-        "Bổ sung Filtered Historical Simulation làm phương pháp đối chứng.",
-        "Backtest ES và kiểm tra độ nhạy theo độ dài cửa sổ và mức tin cậy.",
-    ], C["violet"], "m")
-
-    section("5. Tái lập kết quả")
-    text_card("Quy trình", "Chạy lại toàn bộ trong năm bước",
-              "<b>Bước 1:</b> clone repository. <b>Bước 2:</b> cài thư viện trong <code>requirements.txt</code>. "
-              f"<b>Bước 3:</b> dùng dữ liệu đã chốt ngày {DATA_FREEZE_DATE} trong <code>data/</code>. "
-              "<b>Bước 4:</b> mở notebook <code>notebooks/market_risk_analysis.ipynb</code> và chạy toàn bộ để tạo các bảng và biểu đồ trong <code>outputs/</code>. "
-              "<b>Bước 5:</b> chạy dashboard để đọc các kết quả trong <code>outputs/</code>.<br>"
-              f"Repository: <b>{REPO_URL.replace('https://', '')}</b>", C["blue"], "m")
-
-    section("6. Kết luận")
-    takeaway("Đo lường rủi ro thị trường nên theo nhiều lớp: VaR xác định ngưỡng tổn thất, ES bổ sung thông tin về phần đuôi, "
-             "backtesting kiểm tra khả năng dự báo và stress test đánh giá phản ứng khi thị trường căng thẳng.")
-    warn("Kết quả phản ánh cấu hình nghiên cứu hiện tại của nhóm. Không nên dùng riêng một chỉ tiêu hoặc một mô hình để kết luận về rủi ro của danh mục.")
+    section("2. Kết quả stress test ngoài mẫu", "Ba giai đoạn: 2008–2009, 2020 và 2022.")
+    s1, s2 = st.columns([1, 2])
+    with s1: card("Khoảng tỷ lệ vi phạm", "4,48% – 6,14%", "Tùy mô hình và giai đoạn, kỳ vọng 2,5%", C["coral"], "m")
+    with s2: text_card("Diễn giải", "Tổn thất vượt VaR thường xuyên hơn dự báo",
+                       "Tỷ lệ vi phạm đều cao hơn 2,5% ở cả ba giai đoạn. Kết quả cho thấy trong các giai đoạn căng thẳng, "
+                       "tổn thất thực tế vượt ngưỡng VaR thường xuyên hơn mức mà các mô hình dự báo.",
+                       C["coral"], "m")
+    warn("Các tỷ lệ này mô tả kết quả của những giai đoạn cụ thể; chúng không đảm bảo mọi khủng hoảng trong tương lai sẽ có mức rủi ro tương tự.")
 
 st.markdown(
     f'<div class="footer">Dữ liệu chốt ngày {DATA_FREEZE_DATE} &nbsp;|&nbsp; '
