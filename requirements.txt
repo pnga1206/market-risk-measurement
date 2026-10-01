@@ -1,0 +1,10 @@
+numpy==2.5.3
+pandas==3.0.6
+scipy==1.18.1
+matplotlib
+arch
+jupyter
+ipykernel
+yfinance
+requests
+dnse-sdk-openapi==2.3.0
